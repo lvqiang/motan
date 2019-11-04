@@ -16,45 +16,45 @@
 
 package com.weibo.api.motan.transport;
 
+import com.weibo.api.motan.exception.MotanBizException;
+import com.weibo.api.motan.exception.MotanFrameworkException;
+import com.weibo.api.motan.exception.MotanServiceException;
+import com.weibo.api.motan.protocol.rpc.CompressRpcCodec;
+import com.weibo.api.motan.rpc.*;
+import com.weibo.api.motan.serialize.DeserializableObject;
+import com.weibo.api.motan.util.LoggerUtil;
+import com.weibo.api.motan.util.MotanFrameworkUtil;
+import com.weibo.api.motan.util.ReflectUtil;
+import org.apache.commons.lang3.StringUtils;
+
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.weibo.api.motan.exception.MotanBizException;
-import com.weibo.api.motan.exception.MotanFrameworkException;
-import com.weibo.api.motan.exception.MotanServiceException;
-import com.weibo.api.motan.protocol.rpc.CompressRpcCodec;
-import com.weibo.api.motan.rpc.DefaultResponse;
-import com.weibo.api.motan.rpc.Provider;
-import com.weibo.api.motan.rpc.Request;
-import com.weibo.api.motan.rpc.Response;
-import com.weibo.api.motan.util.LoggerUtil;
-import com.weibo.api.motan.util.MotanFrameworkUtil;
-import com.weibo.api.motan.util.ReflectUtil;
-
 /**
  * service 消息处理
- * 
+ * <p>
  * <pre>
  * 		1） 多个service的支持
  * 		2） 区分service的方式： group/interface/version
  * </pre>
- * 
+ *
  * @author maijunsheng
  * @version 创建时间：2013-6-4
- * 
  */
 public class ProviderMessageRouter implements MessageHandler {
-    private Map<String, Provider<?>> providers = new HashMap<String, Provider<?>>();
+    protected Map<String, Provider<?>> providers = new HashMap<>();
 
     // 所有暴露出去的方法计数
     // 比如：messageRouter 里面涉及2个Service: ServiceA 有5个public method，ServiceB
     // 有10个public method，那么就是15
     protected AtomicInteger methodCounter = new AtomicInteger(0);
 
-    public ProviderMessageRouter() {}
+    public ProviderMessageRouter() {
+    }
 
     public ProviderMessageRouter(Provider<?> provider) {
         addProvider(provider);
@@ -83,21 +83,45 @@ public class ProviderMessageRouter implements MessageHandler {
                     new MotanServiceException(this.getClass().getSimpleName() + " handler Error: provider not exist serviceKey="
                             + serviceKey + " " + MotanFrameworkUtil.toString(request));
 
-            DefaultResponse response = new DefaultResponse();
-            response.setException(exception);
+            DefaultResponse response = MotanFrameworkUtil.buildErrorResponse(request, exception);
             return response;
         }
-
-        return call(request, provider);
+        Method method = provider.lookupMethod(request.getMethodName(), request.getParamtersDesc());
+        fillParamDesc(request, method);
+        processLazyDeserialize(request, method);
+        Response response = call(request, provider);
+        response.setSerializeNumber(request.getSerializeNumber());
+        response.setRpcProtocolVersion(request.getRpcProtocolVersion());
+        return response;
     }
 
     protected Response call(Request request, Provider<?> provider) {
         try {
             return provider.call(request);
         } catch (Exception e) {
-            DefaultResponse response = new DefaultResponse();
-            response.setException(new MotanBizException("provider call process error", e));
-            return response;
+            return MotanFrameworkUtil.buildErrorResponse(request, new MotanBizException("provider call process error", e));
+        }
+    }
+
+    private void processLazyDeserialize(Request request, Method method) {
+        if (method != null && request.getArguments() != null && request.getArguments().length == 1
+                && request.getArguments()[0] instanceof DeserializableObject
+                && request instanceof DefaultRequest) {
+            try {
+                Object[] args = ((DeserializableObject) request.getArguments()[0]).deserializeMulti(method.getParameterTypes());
+                ((DefaultRequest) request).setArguments(args);
+            } catch (IOException e) {
+                throw new MotanFrameworkException("deserialize parameters fail: " + request.toString() + ", error:" + e.getMessage());
+            }
+        }
+    }
+
+    private void fillParamDesc(Request request, Method method) {
+        if (method != null && StringUtils.isBlank(request.getParamtersDesc())
+                && request instanceof DefaultRequest) {
+            DefaultRequest dr = (DefaultRequest) request;
+            dr.setParamtersDesc(ReflectUtil.getMethodParamDesc(method));
+            dr.setMethodName(method.getName());
         }
     }
 

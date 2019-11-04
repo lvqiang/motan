@@ -50,6 +50,7 @@ public enum URLParamType {
     lazyInit("lazyInit", false),
     /** multi referer share the same channel **/
     shareChannel("shareChannel", false),
+    asyncInitConnection("asyncInitConnection", false),
 
     /************************** SPI start ******************************/
 
@@ -114,12 +115,19 @@ public enum URLParamType {
     check("check", "true"), 
     directUrl("directUrl", ""), 
     registrySessionTimeout("registrySessionTimeout", 1 * MotanConstants.MINUTE_MILLS),
+    slowThreshold("slowThreshold", 200),
 
     register("register", true), 
     subscribe("subscribe", true), 
     throwException("throwException", "true"),
+    transExceptionStack("transExceptionStack", true),
 
     localServiceAddress("localServiceAddress", ""),
+    // backupRequest
+    backupRequestDelayTime("backupRequestDelayTime", 0),
+    backupRequestDelayRatio("backupRequestDelayRatio", "0.4"),
+    backupRequestSwitcherName("backupRequestSwitcherName", ""),
+    backupRequestMaxRetryRatio("backupRequestMaxRetryRatio", "0.15"),
 
     // 切换group时，各个group的权重比。默认无权重
     weights("weights", "");

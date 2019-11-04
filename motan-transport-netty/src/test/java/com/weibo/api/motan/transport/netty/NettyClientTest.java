@@ -16,6 +16,7 @@
 
 package com.weibo.api.motan.transport.netty;
 
+import com.weibo.api.motan.common.MotanConstants;
 import com.weibo.api.motan.common.URLParamType;
 import com.weibo.api.motan.exception.MotanServiceException;
 import com.weibo.api.motan.rpc.*;
@@ -87,6 +88,27 @@ public class NettyClientTest {
             response = nettyClient.request(request);
             Object result = response.getValue();
 
+            Assert.assertNotNull(result);
+            Assert.assertEquals("method: " + request.getMethodName() + " requestId: " + request.getRequestId(), result);
+        } catch (MotanServiceException e) {
+            assertTrue(false);
+        } catch (Exception e) {
+            assertTrue(false);
+        }
+
+    }
+    
+    @Test
+    public void testAsync() {
+        nettyClient = new NettyClient(url);
+        nettyClient.open();
+        RpcContext.getContext().putAttribute(MotanConstants.ASYNC_SUFFIX, true);
+        Response response;
+        try {
+            response = nettyClient.request(request);
+            Assert.assertTrue(response instanceof ResponseFuture);
+            Object result = response.getValue();
+            RpcContext.destroy();
             Assert.assertNotNull(result);
             Assert.assertEquals("method: " + request.getMethodName() + " requestId: " + request.getRequestId(), result);
         } catch (MotanServiceException e) {
